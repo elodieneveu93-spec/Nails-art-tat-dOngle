@@ -1,0 +1,21 @@
+# Press-On Nails Configurator 💅
+
+Un petit configurateur en ligne pour permettre aux clientes de créer leur kit de Press-On Nails personnalisé.
+
+## ✨ Fonctionnalités
+- Choix de la **forme** (amande, ovale, coffin…)
+- Sélection de la **couleur**
+- Ajout de **motifs** et décorations
+- Formulaire de **taille** (doigts personnalisés)
+- Génération d’un **récapitulatif PDF** à envoyer
+
+## 🚀 Démo en ligne
+👉 [etatdongle.vercel.app](https://etatdongle.vercel.app)
+
+## ⚙️ Installation locale (optionnel)
+Si vous voulez tester en local :
+```bash
+git clone https://github.com/ton-compte/etatdongle.git
+cd etatdongle
+npm install
+npm run dev
