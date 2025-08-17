@@ -1,506 +1,569 @@
 // pages/index.js
-import { useState, Fragment } from "react";
-import { jsPDF } from "jspdf";
+import { useState, useMemo, useRef } from "react";
 
-/** ========= Thème / Marque ========= */
-const BRAND = process.env.NEXT_PUBLIC_BRAND_NAME || "État d’Ongles";
-const COLORS = {
-  primary: "#EEC4D2",
-  primaryDark: "#D9A7B9",
-  bg1: "#FFF7FA",
-  bg2: "#FEFDFE",
-  text: "#1F2937",
-  muted: "#6B7280",
-  card: "#FFFFFF",
-  border: "#E5E7EB",
+// --- visuels de secours (demo gratuite)
+const WOOD =
+  "https://images.unsplash.com/photo-1541080477408-659cf03d4d92?q=80&w=1600&auto=format&fit=crop";
+const PLACEHOLDERS = [
+  "https://images.unsplash.com/photo-1604654894610-df63bc536371?q=80&w=1200&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1604654894693-7d829b6a48bf?q=80&w=1200&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1604654894916-7f7b39fbf1f1?q=80&w=1200&auto=format&fit=crop",
+  "https://images.unsplash.com/photo-1604654894647-9f88fec8a0e2?q=80&w=1200&auto=format&fit=crop",
+];
+
+// --- tableaux tailles (mm) pour kits prêts à porter
+const READY_SIZES = {
+  XS: { L: [0,0,0,0,0], R: [0,0,0,0,0] }, // optionnel si tu veux autoriser XS
+  S:  { L: [15,11,11,11, 8], R: [15,11,11,11, 8] },
+  M:  { L: [16,12,13,12, 9], R: [16,12,13,12, 9] },
+  L:  { L: [17,13,14,13,10], R: [17,13,14,13,10] },
+  XL: { L: [18,14,15,14,11], R: [18,14,15,14,11] },
 };
 
-/** ========= Idées (préréglages) ========= */
+// --- préréglages (petites cartes d'idées)
 const PRESETS = [
   { label: "Doux & poétique", shape: "amande", length: "moyenne", colors: "bleu pastel, nude rosé", motifs: "petites fleurs blanches, paillettes très fines", vibe: "léger, romantique, lumineux" },
   { label: "Glam rock", shape: "coffin court", length: "courte", colors: "noir mat, chrome argent", motifs: "french inversée fine, accents métalliques", vibe: "audacieux, soirée, edgy" },
   { label: "Minimal chic", shape: "ovale court", length: "courte", colors: "nude beige, blanc", motifs: "french fine, demi-lune", vibe: "propre, bureau, quotidien" },
-  { label: "Mariée lumineuse", shape: "amande", length: "longue", colors: "lilas très pâle, blanc nacré", motifs: "babyboomer, nacres subtiles", vibe: "élégant, intemporel" },
-  { label: "Pastel romantique", shape: "amande", length: "moyenne", colors: "rose poudré, lilas, ivoire", motifs: "micro-fleurs, traits fins dorés", vibe: "printanier, féminin, délicat" },
-  { label: "Classique nude", shape: "ovale", length: "moyenne", colors: "nude rosé, blanc doux", motifs: "french subtile", vibe: "sobre, épuré, chic" },
+  { label: "Mariée lumineuse", shape: "amande", length: "longue", colors: "lilas très pâle, blanc nacré", motifs: "délicates paillettes, micro perles", vibe: "élégant, photo-ready" },
+  { label: "Pastel romantique", shape: "amande", length: "moyenne", colors: "rose poudré, lilas, ivoire", motifs: "dégradé doux, fleurs", vibe: "printemps, tendre" },
+  { label: "Classique nude", shape: "ovale", length: "moyenne", colors: "nude rosé, blanc doux", motifs: "french subtile", vibe: "sobre, intemporel" },
 ];
 
-/** ========= Images de démo (fallback gratuit) ========= */
-const WOOD = "https://images.unsplash.com/photo-1557683316-973673baf926?q=80&w=1600&auto=format&fit=crop";
-const PLACEHOLDERS = [
-  "https://images.unsplash.com/photo-1604654894610-df63bc536371?q=80&w=1200&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1604654894693-7d829b6a48bf?q=80&w=1200&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1540518614846-7eded433c457?q=80&w=1200&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1616394584738-24b919c8d6cb?q=80&w=1200&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1620331311521-48f3e3a05d0a?q=80&w=1200&auto=format&fit=crop",
-  "https://images.unsplash.com/photo-1519014816548-bf5fe059798b?q=80&w=1200&auto=format&fit=crop",
-];
-
-/** ========= Tailles kits (mm) ========= */
-const SIZE_PRESETS = {
-  XS: { left:[14,10,11,10,7], right:[14,10,11,10,7] },
-  S:  { left:[15,11,11,11,8], right:[15,11,11,11,8] },
-  M:  { left:[16,12,13,12,9], right:[16,12,13,12,9] },
-  L:  { left:[17,13,14,13,10], right:[17,13,14,13,10] },
-  XL: { left:[18,14,15,14,11], right:[18,14,15,14,11] },
-};
-const FINGERS = ["Pouce","Index","Majeur","Annulaire","Auriculaire"];
-
-/** ========= Composant principal ========= */
 export default function Home() {
-  // Identité cliente
-  const [name, setName] = useState("");
-  const [email, setEmail] = useState("");
-  const [phone, setPhone] = useState("");
-  const [instagram, setInstagram] = useState("");
-
-  // Brief style
-  const [shape, setShape] = useState("");
-  const [length, setLength] = useState("");
-  const [colors, setColors] = useState("");
-  const [motifs, setMotifs] = useState("");
+  // --- état principal
+  const [shape, setShape] = useState("amande");
+  const [length, setLength] = useState("moyenne");
+  const [colors, setColors] = useState("bleu roi et jaune");
+  const [motifs, setMotifs] = useState("fleur");
   const [vibe, setVibe] = useState("");
 
-  // Génération
-  const [prompt, setPrompt] = useState("");
+  const [premium, setPremium] = useState(true); // coche = IA, décoche = démo
+
+  // tailles des kits
+  const [knowSizes, setKnowSizes] = useState(true);     // true = prêt-à-porter
+  const [kitSize, setKitSize] = useState("M");          // XS,S,M,L,XL
+  const [sizesLeft, setSizesLeft]   = useState(["","","","",""]);
+  const [sizesRight, setSizesRight] = useState(["","","","",""]);
+
+  const [notes, setNotes] = useState("");
   const [images, setImages] = useState([]);
-  const [selected, setSelected] = useState([]); // index des images choisies
-  const [premium, setPremium] = useState(false);
   const [loading, setLoading] = useState(false);
   const [toast, setToast] = useState("");
 
-  // Tailles
-  const [sizeMode, setSizeMode] = useState("preset"); // "preset" | "custom"
-  const [kitSize, setKitSize] = useState("M");
-  const [sizesLeft, setSizesLeft] = useState(["","","","",""]);
-  const [sizesRight, setSizesRight] = useState(["","","","",""]);
-  const [notes, setNotes] = useState("");
+  const printableRef = useRef(null);
 
-  /** Appliquer un préréglage */
-  function applyPreset(p){
-    setShape(p.shape);
-    setLength(p.length);
-    setColors(p.colors);
-    setMotifs(p.motifs);
-    setVibe(p.vibe);
+  // quand on choisit une taille “kit”, on affiche les mesures qui correspondent
+  const shownKitMeasures = useMemo(() => {
+    const m = READY_SIZES[kitSize];
+    if (!m) return null;
+    return m;
+  }, [kitSize]);
+
+  // si l’utilisateur choisit "je connais ma taille", on remplit les champs pour info (en lecture)
+  const isCustom = !knowSizes;
+
+  // --- fabrique le texte prompt pour l’IA
+  function buildPrompt() {
+    const base =
+      `Photo réaliste d'un nuancier de press-on nails présenté sur une planche en bois clair, ` +
+      `lumière douce studio, focus sur les tips, style e-commerce.`;
+    const style =
+      `Forme: ${shape} • Longueur: ${length} • ` +
+      `Couleurs: ${colors} • Motifs/déco: ${motifs}` +
+      (vibe ? ` • Ambiance: ${vibe}` : "");
+    const safe = `Pas de logos/licences; rendu propre, net.`;
+
+    return `${base}\n${style}\n${safe}`;
   }
 
-  /** Construire le prompt IA */
-  function buildPrompt(){
-    const bits = [
-      shape && `Forme: ${shape}`,
-      length && `Longueur: ${length}`,
-      colors && `Couleurs: ${colors}`,
-      motifs && `Motifs/déco: ${motifs}`,
-      vibe && `Ambiance/style: ${vibe}`,
-    ].filter(Boolean).join(" • ");
-
-    const base = "Photo réaliste d'un nuancier de press-on nails présenté sur une planche en bois clair, lumière douce studio, focus sur les tips, style e-commerce.";
-    const constraints = "Pas de logos/licences; rendu propre; fond minimal; alignement régulier; couleurs fidèles.";
-
-    const full = `${base}\n${bits}\n${constraints}`;
-    setPrompt(full);
-    return full;
-  }
-
-  /** Générer les visuels (appelle notre API serveur → Hugging Face + cache) */
-  async function generate(){
-    setLoading(true); setImages([]); setSelected([]);
-    const p = buildPrompt();
-
+  // --- génération IA (ou placeholders si premium décoché / erreur)
+  async function generate() {
+    setLoading(true);
+    setImages([]);
     try {
-      const r = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type":"application/json" },
-        body: JSON.stringify({ prompt: p, num: 6, premium })
-      });
-      const j = await r.json();
-
-      if (j.ok) {
-        setImages(j.images);
-        if (j.cached) setToast("Images servies depuis le cache (0€) ✔︎");
-      } else {
-        // premium OFF, quota, ou erreur côté modèle → on affiche des démos
-        setToast("Génération premium indisponible. J’affiche des visuels démo.");
+      const p = buildPrompt();
+      if (!premium) {
         setImages(PLACEHOLDERS);
+        setToast("Mode démo — images d’inspiration");
+      } else {
+        const r = await fetch("/api/generate", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ prompt: p, num: 4 }),
+        });
+        const j = await r.json();
+        if (j.ok) {
+          setImages(j.images);
+          setToast("Images générées via IA ✔︎");
+        } else {
+          setImages(PLACEHOLDERS);
+          setToast("IA indisponible — démo affichée");
+        }
       }
-    } catch {
-      setToast("Erreur réseau. Visuels démo affichés.");
+    } catch (e) {
       setImages(PLACEHOLDERS);
+      setToast("Erreur — démo affichée");
     } finally {
       setLoading(false);
-      setTimeout(()=>setToast(""), 4000);
+      setTimeout(() => setToast(""), 3500);
     }
   }
 
-  /** Sélection d’un visuel */
-  function toggleSelect(i){
-    setSelected(prev => prev.includes(i) ? prev.filter(x=>x!==i) : [...prev, i]);
+  // --- e-mail : ouvre le client mail avec toutes les infos + 1ère image en lien
+  function sendEmail() {
+    const subject = encodeURIComponent("Brief Press-On – État d’Ongles");
+    const p = buildPrompt();
+    const kit =
+      knowSizes
+        ? `Kit prêt-à-porter : ${kitSize}\n` +
+          (shownKitMeasures
+            ? `Tailles (mm) — Gauche [Pouce,Index,Majeur,Annulaire,Auriculaire] : ${shownKitMeasures.L.join(", ")}\n` +
+              `Droite [Pouce,Index,Majeur,Annulaire,Auriculaire] : ${shownKitMeasures.R.join(", ")}\n`
+            : "")
+        : `100% sur-mesure (mm) :\n` +
+          `Gauche [${sizesLeft.join(", ")}]\nDroite [${sizesRight.join(", ")}]\n`;
+
+    const body =
+      encodeURIComponent(
+        `Bonjour,\n\nVoici mon brief :\n\n` +
+        `${p}\n\n` +
+        `Tailles du kit :\n${kit}\n` +
+        (notes ? `Notes/précisions :\n${notes}\n\n` : "\n") +
+        (images[0] ? `Aperçu visuel : (copiez-collez dans le navigateur si besoin)\n${images[0]}\n\n` : "") +
+        `— Envoyé depuis le simulateur État d’Ongles`
+      );
+
+    window.location.href = `mailto:etatdongles@example.com?subject=${subject}&body=${body}`;
   }
 
-  /** Récup tailles actuelles (preset ou sur-mesure) */
-  function getCurrentSizes(){
-    if (sizeMode==="preset" && SIZE_PRESETS[kitSize]){
-      return { sizesLeft: SIZE_PRESETS[kitSize].left, sizesRight: SIZE_PRESETS[kitSize].right, label: kitSize };
-    }
-    return { sizesLeft: sizesLeft.map(v=>v||"-"), sizesRight: sizesRight.map(v=>v||"-"), label: "Sur mesure" };
-    }
-
-  /** Export PDF (brief complet) */
-  function exportPDF(){
-    const s = getCurrentSizes();
-    const doc = new jsPDF({ unit:"pt", format:"a4" });
-    const m=40; let y=m;
-
-    doc.setFont("helvetica","bold");
-    doc.setFontSize(18);
-    doc.text(`${BRAND} – Brief Press-On`, m, y); y+=24;
-
-    doc.setFont("helvetica","normal");
-    doc.setFontSize(12);
-    doc.text(`Client(e) : ${name||"—"} | Email : ${email||"—"} | Tel : ${phone||"—"} | IG : ${instagram||"—"}`, m, y); y+=18;
-
-    [
-      `Forme: ${shape||"—"}`,
-      `Longueur: ${length||"—"}`,
-      `Couleurs: ${colors||"—"}`,
-      `Motifs/déco: ${motifs||"—"}`,
-      `Ambiance/style: ${vibe||"—"}`,
-    ].forEach(line => { doc.text(line,m,y); y+=16; });
-
-    y+=8; doc.setFont("helvetica","bold"); doc.text("Prompt généré", m, y); y+=14;
-    doc.setFont("helvetica","normal");
-    const pr = doc.splitTextToSize(prompt||buildPrompt(), 515);
-    doc.text(pr, m, y); y += pr.length*14 + 10;
-
-    doc.setFont("helvetica","bold"); doc.text(`Tailles (${s.label})`, m, y); y+=16;
-    FINGERS.forEach((f,i)=>{
-      doc.setFont("helvetica","normal");
-      doc.text(`${f}: G ${s.sizesLeft[i]} mm | D ${s.sizesRight[i]} mm`, m, y);
-      y+=14;
-    });
-
-    if (notes){
-      y+=10; doc.setFont("helvetica","bold"); doc.text("Notes", m, y); y+=14;
-      doc.setFont("helvetica","normal");
-      const n = doc.splitTextToSize(notes, 515);
-      doc.text(n, m, y); y += n.length*14 + 6;
-    }
-
-    const chosen = selected.map(i=>images[i]);
-    if (chosen.length){
-      y+=8; doc.setFont("helvetica","bold"); doc.text("Visuels choisis", m, y); y+=14;
-      const w=110,h=80,g=10; let x=m;
-      for (let i=0;i<chosen.length;i++){
-        doc.rect(x,y,w,h);
-        doc.text(`Image ${i+1}`, x+8, y+16);
-        x += w+g;
-        if (x+w>doc.internal.pageSize.getWidth()-m){ x=m; y+=h+g; }
-      }
-    }
-
-    doc.save("brief-press-on.pdf");
+  // --- export "PDF" (impression) : ouvre la boîte d’impression du contenu
+  function exportPrint() {
+    if (!printableRef.current) return;
+    const html = printableRef.current.innerHTML;
+    const w = window.open("", "_blank");
+    if (!w) return;
+    w.document.write(`
+      <html>
+        <head>
+          <title>Brief État d’Ongles</title>
+          <meta name="viewport" content="width=device-width, initial-scale=1" />
+          <style>
+            body{ font-family: ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Helvetica, Arial; 
+                  padding: 24px; line-height:1.45; color:#222; }
+            h1{ font-size:20px; margin:0 0 12px; }
+            h2{ font-size:16px; margin:16px 0 6px; }
+            .card{ border:1px solid #eee; border-radius:12px; padding:16px; margin-top:10px; }
+            .row{ display:flex; gap:8px; }
+            .pill{ padding:6px 10px; border-radius:999px; background:#f3e7eb; }
+            img{ max-width:100%; border-radius:12px; margin-top:8px; }
+          </style>
+        </head>
+        <body>${html}</body>
+      </html>
+    `);
+    w.document.close();
+    w.focus();
+    w.print();
   }
 
-  /** Envoyer par e-mail (ouvre le client mail avec toutes les infos) */
-  function sendEmail(){
-    if (!email || !name) { setToast("Renseigne ton nom et ton e-mail."); return; }
-    const s = getCurrentSizes();
-    const chosen = selected.map(i=>images[i]);
-    const pics = (chosen.length? chosen : images.slice(0,3)).join("\n");
+  // --- helpers UI
+  const bg = "#0d0d0f";
+  const card = "#16161a";
+  const soft = "#f5e2e7"; // rose poudré
+  const textSoft = "#6b7280";
 
-    const subject = encodeURIComponent(`Commande Press-On – ${name}`);
-    const body = encodeURIComponent(
-`Marque: ${BRAND}
-
-Client(e)
-- Nom: ${name}
-- Email: ${email}
-- Tel: ${phone||"—"}
-- Instagram: ${instagram||"—"}
-
-Brief
-- Forme: ${shape||"—"}
-- Longueur: ${length||"—"}
-- Couleurs: ${colors||"—"}
-- Motifs/déco: ${motifs||"—"}
-- Ambiance/style: ${vibe||"—"}
-
-Tailles (${s.label})
-Gauche (mm): ${FINGERS.map((f,i)=>`${f} ${s.sizesLeft[i]}`).join(" | ")}
-Droite (mm): ${FINGERS.map((f,i)=>`${f} ${s.sizesRight[i]}`).join(" | ")}
-
-Notes:
-${notes||"—"}
-
-Prompt IA:
-${prompt||buildPrompt()}
-
-Visuels (URLs):
-${pics}
-`
+  function Pill({ children, active, onClick }) {
+    return (
+      <button
+        onClick={onClick}
+        style={{
+          padding: "10px 14px",
+          borderRadius: 14,
+          border: `1px solid ${active ? "#e5b8c7" : "#2a2a2f"}`,
+          background: active ? "#f0d2db" : "#1b1b20",
+          color: active ? "#251a1e" : "#d8d8df",
+          fontWeight: 600,
+        }}
+      >
+        {children}
+      </button>
     );
-
-    // Mets ici ton mail pro :
-    const shopEmail = "contact@exemple.com";
-    window.location.href = `mailto:${shopEmail}?subject=${subject}&body=${body}`;
   }
 
-  /** Petits helpers d’UI */
-  const input=(v,s,ph,t="text")=>(
-    <input
-      type={t} value={v} onChange={e=>s(e.target.value)} placeholder={ph}
-      style={{
-        width:"100%", background:COLORS.card, color:COLORS.text,
-        border:`1px solid ${COLORS.border}`, borderRadius:14, padding:12, marginTop:6, fontSize:14
-      }}
-    />
-  );
-
+  // --- rendu
   return (
-    <div style={{minHeight:"100vh", background:`linear-gradient(180deg, ${COLORS.bg1}, ${COLORS.bg2})`, color:COLORS.text}}>
-      <header style={{maxWidth:960, margin:"0 auto", padding:"16px 16px 0"}}>
-        <div style={{display:"flex", justifyContent:"center"}}>
-          <div style={{fontWeight:900, letterSpacing:.3, fontSize:20, color:"#8C4A5E"}}>✨ {BRAND} ✨</div>
-        </div>
-      </header>
-
-      <main style={{maxWidth:960, margin:"0 auto", padding:16}}>
-        <h1 style={{fontSize:26, fontWeight:800, lineHeight:1.25, textAlign:"center"}}>
-          Crée ton kit <i style={{color:"#9C5D73"}}>Press-On</i> personnalisé
+    <div style={{ background: bg, minHeight: "100vh", color: "#fff", padding: 16 }}>
+      {/* header */}
+      <div style={{ maxWidth: 980, margin: "0 auto" }}>
+        <h1 style={{ fontSize: 28, margin: "8px 0 6px", fontWeight: 800 }}>
+          État d’Ongles — configurateur Press-On
         </h1>
-        <div style={{color:COLORS.muted, fontSize:12, textAlign:"center", marginBottom:14}}>Prototype • optimisé mobile</div>
+        <p style={{ color: textSoft, marginBottom: 18 }}>Prototype mobile-first</p>
 
-        <div style={{display:"grid", gap:16, gridTemplateColumns:"1fr"}}>
-          {/* Colonne gauche */}
-          <div>
-            <Card><CardTitle>Tes informations</CardTitle>
-              {input(name,setName,"Nom / Prénom")}
-              {input(email,setEmail,"Email","email")}
-              {input(phone,setPhone,"Téléphone")}
-              {input(instagram,setInstagram,"Instagram (optionnel)")}
-            </Card>
-
-            <Card><CardTitle>Préréglages (idées en 1 clic)</CardTitle>
-              <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:10}}>
-                {PRESETS.map(p=>(
-                  <button key={p.label} onClick={()=>applyPreset(p)}
-                    style={{
-                      background:COLORS.card, color:COLORS.text,
-                      border:`1px solid ${COLORS.border}`, borderRadius:14,
-                      padding:10, textAlign:"left", fontSize:13
-                    }}>
-                    <div style={{fontWeight:700}}>{p.label}</div>
-                    <div style={{color:COLORS.muted}}>{p.shape} • {p.colors}</div>
-                  </button>
-                ))}
-              </div>
-            </Card>
-
-            <Card><CardTitle>Ton style</CardTitle>
-              <Label>Forme</Label>{input(shape,setShape,"amande, coffin, ovale…")}
-              <Label>Longueur</Label>{input(length,setLength,"courte, moyenne, longue")}
-              <Label>Couleurs</Label>{input(colors,setColors,"rose poudré, lilas, nude rosé…")}
-              <Label>Motifs / déco</Label>{input(motifs,setMotifs,"french fine, chrome, fleurs…")}
-              <Label>Ambiance / style</Label>{input(vibe,setVibe,"doux & poétique, minimal chic…")}
-
-              <Button onClick={generate} filled>{loading ? "Génération…" : "Générer des visuels"}</Button>
-              <label style={{display:"flex", alignItems:"center", gap:8, marginTop:8, fontSize:12}}>
-                <input type="checkbox" checked={premium} onChange={e=>setPremium(e.target.checked)} />
-                Qualité <b>premium</b> (IA serveur + cache ; peut coûter quelques centimes)
-              </label>
-
-              <div style={{marginTop:10}}>
-                <Label>Prompt généré (aperçu)</Label>
-                <textarea readOnly value={prompt}
-                  style={{
-                    width:"100%", height:100, background:COLORS.card, color:COLORS.text,
-                    border:`1px solid ${COLORS.border}`, borderRadius:14, padding:10, marginTop:6, fontSize:12
+        {/* grille principale */}
+        <div
+          style={{
+            display: "grid",
+            gridTemplateColumns: "1fr",
+            gap: 16,
+          }}
+        >
+          {/* Colonne gauche : préréglages + formulaire */}
+          <div style={{ background: card, borderRadius: 16, padding: 16 }}>
+            <h2 style={{ fontSize: 18, marginBottom: 8 }}>Préréglages (idées en 1 clic)</h2>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8, marginBottom: 14 }}>
+              {PRESETS.map((p) => (
+                <button
+                  key={p.label}
+                  onClick={() => {
+                    setShape(p.shape);
+                    setLength(p.length);
+                    setColors(p.colors);
+                    setMotifs(p.motifs);
+                    setVibe(p.vibe);
                   }}
-                />
-              </div>
-            </Card>
-
-            <Card><CardTitle>Tailles du kit</CardTitle>
-              <div style={{display:"grid", gap:8}}>
-                <label style={{display:"flex", gap:8, alignItems:"center", fontSize:13}}>
-                  <input type="radio" name="sizeMode" checked={sizeMode==="preset"} onChange={()=>setSizeMode("preset")} />
-                  Je connais ma taille (kit prêt à porter)
-                </label>
-                <label style={{display:"flex", gap:8, alignItems:"center", fontSize:13}}>
-                  <input type="radio" name="sizeMode" checked={sizeMode==="custom"} onChange={()=>setSizeMode("custom")} />
-                  Je ne connais pas / 100% sur-mesure
-                </label>
-              </div>
-
-              {sizeMode==="preset" && (
-                <>
-                  <div style={{display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8, marginTop:10}}>
-                    {["XS","S","M","L","XL"].map(t=>(
-                      <label key={t}
-                        style={{
-                          border:`1px solid ${COLORS.border}`, borderRadius:12, padding:"10px 8px",
-                          textAlign:"center", cursor:"pointer",
-                          background:kitSize===t?COLORS.primary:COLORS.card,
-                          color:kitSize===t?"#1b1b1c":COLORS.text, fontWeight:700, fontSize:13
-                        }}>
-                        <input type="radio" name="kitSize" checked={kitSize===t} onChange={()=>setKitSize(t)} style={{display:"none"}} />
-                        {t}
-                      </label>
-                    ))}
+                  style={{
+                    textAlign: "left",
+                    background: "#1b1b20",
+                    border: "1px solid #2a2a2f",
+                    borderRadius: 14,
+                    padding: 12,
+                    color: "#e7e7ee",
+                  }}
+                >
+                  <div style={{ fontWeight: 800, marginBottom: 4 }}>{p.label}</div>
+                  <div style={{ color: textSoft, fontSize: 13 }}>
+                    {p.shape} • {p.length}
+                    <br /> {p.colors}
                   </div>
+                </button>
+              ))}
+            </div>
 
-                  <div style={{marginTop:10, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:10, background:COLORS.card}}>
-                    <div style={{fontSize:12, fontWeight:800, marginBottom:8}}>
-                      Détails du kit <span style={{color:"#9C5D73"}}>{kitSize}</span> (mm)
-                    </div>
-                    <div style={{display:"grid", gridTemplateColumns:"auto 1fr 1fr", gap:8, fontSize:12}}>
-                      <div style={{fontWeight:700}}></div>
-                      <div style={{fontWeight:700, textAlign:"center"}}>Main gauche</div>
-                      <div style={{fontWeight:700, textAlign:"center"}}>Main droite</div>
-                      {FINGERS.map((f,i)=>(
-                        <Fragment key={f}>
-                          <div style={{color:COLORS.muted}}>{f}</div>
-                          <div style={{textAlign:"center", padding:"6px 8px", border:`1px solid ${COLORS.border}`, borderRadius:10}}>
-                            {SIZE_PRESETS[kitSize].left[i]} mm
-                          </div>
-                          <div style={{textAlign:"center", padding:"6px 8px", border:`1px solid ${COLORS.border}`, borderRadius:10}}>
-                            {SIZE_PRESETS[kitSize].right[i]} mm
-                          </div>
-                        </Fragment>
-                      ))}
-                    </div>
-                  </div>
-                </>
-              )}
+            {/* champs style */}
+            <div style={{ display: "grid", gap: 12 }}>
+              <Field label="Forme">
+                <input value={shape} onChange={(e) => setShape(e.target.value)} style={inputStyle()} />
+              </Field>
+              <Field label="Longueur">
+                <input value={length} onChange={(e) => setLength(e.target.value)} style={inputStyle()} />
+              </Field>
+              <Field label="Couleurs">
+                <input value={colors} onChange={(e) => setColors(e.target.value)} style={inputStyle()} />
+              </Field>
+              <Field label="Motifs / déco">
+                <input value={motifs} onChange={(e) => setMotifs(e.target.value)} style={inputStyle()} />
+              </Field>
+              <Field label="Ambiance (optionnel)">
+                <input value={vibe} onChange={(e) => setVibe(e.target.value)} style={inputStyle()} />
+              </Field>
+            </div>
 
-              {sizeMode==="custom" && (
-                <div style={{marginTop:10, display:"grid", gridTemplateColumns:"1fr 1fr", gap:10}}>
-                  <SizesCard title="Main gauche (mm)" values={sizesLeft} onChange={setSizesLeft} />
-                  <SizesCard title="Main droite (mm)" values={sizesRight} onChange={setSizesRight} />
-                </div>
-              )}
-
-              <p style={{marginTop:10, fontSize:12, color:COLORS.muted}}>
-                <b>Astuce mesure :</b> mesure la largeur au point le plus large de l’ongle (en mm).
-                Entre deux tailles, choisis la plus petite pour une meilleure tenue. XS et XL dispo sur commande.
-              </p>
-
-              <Label>Notes / précisions</Label>
+            {/* prompt aperçu */}
+            <div style={{ marginTop: 14 }}>
+              <h3 style={{ marginBottom: 6, fontSize: 16, color: soft }}>Prompt généré (aperçu)</h3>
               <textarea
-                value={notes} onChange={e=>setNotes(e.target.value)}
-                placeholder="Habitudes, longueur max, allergies, etc."
+                value={buildPrompt()}
+                readOnly
+                rows={5}
                 style={{
-                  width:"100%", height:70, background:COLORS.card, color:COLORS.text,
-                  border:`1px solid ${COLORS.border}`, borderRadius:14, padding:10, marginTop:6, fontSize:13
+                  width: "100%",
+                  background: "#121216",
+                  color: "#eaeaf0",
+                  border: "1px solid #2a2a2f",
+                  borderRadius: 12,
+                  padding: 12,
                 }}
               />
-
-              <div style={{display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginTop:12}}>
-                <Button onClick={exportPDF}>Exporter le brief en PDF</Button>
-                <Button onClick={sendEmail} filled>Envoyer par e-mail</Button>
-              </div>
-              {!!toast && <div style={{marginTop:8, fontSize:12}}>{toast}</div>}
-            </Card>
+            </div>
           </div>
 
-          {/* Colonne droite : rendu visuel */}
-          <div>
-            <div style={{
-              border:`1px solid ${COLORS.border}`, borderRadius:18, overflow:"hidden",
-              position:"relative", background:COLORS.card
-            }}>
-              <img src={WOOD} alt="planche bois"
-                   style={{width:"100%", height:360, objectFit:"cover", filter:"brightness(.98)"}} />
-              <div style={{
-                position:"absolute", inset:0, padding:12,
-                display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:10, alignContent:"start"
-              }}>
-                {!images.length ? (
-                  <div style={{gridColumn:"1/-1", color:COLORS.text}}>
-                    {loading ? "Génération…" : "Aucun visuel encore. Clique sur Générer."}
-                  </div>
-                ) : (
-                  images.map((src,i)=>{
-                    const isSel = selected.includes(i);
-                    return (
-                      <div key={i} onClick={()=>toggleSelect(i)}
-                        style={{
-                          position:"relative", cursor:"pointer",
-                          outline: isSel ? `3px solid ${COLORS.primaryDark}` : "none",
-                          borderRadius:12, overflow:"hidden", background:"#0001"
-                        }}>
-                        <img src={src} alt={`échantillon ${i+1}`}
-                             style={{width:"100%", height:110, objectFit:"cover"}} />
-                        {isSel && (
-                          <div style={{
-                            position:"absolute", top:6, right:6,
-                            background:COLORS.primaryDark, color:"#1b1b1c",
-                            fontSize:11, fontWeight:800, padding:"4px 6px", borderRadius:999
-                          }}>Choisi</div>
-                        )}
-                      </div>
-                    );
-                  })
-                )}
+          {/* Colonne droite : visuels + actions */}
+          <div style={{ background: card, borderRadius: 16, padding: 16 }}>
+            {/* bandeau bois */}
+            <div
+              style={{
+                backgroundImage: `linear-gradient(180deg, rgba(0,0,0,.35), rgba(0,0,0,.55)), url(${WOOD})`,
+                backgroundSize: "cover",
+                backgroundPosition: "center",
+                borderRadius: 14,
+                padding: 16,
+                minHeight: 120,
+                display: "flex",
+                alignItems: "end",
+              }}
+            >
+              <div>
+                <div style={{ fontWeight: 800, fontSize: 20 }}>Galerie</div>
+                <div style={{ color: textSoft, fontSize: 13 }}>
+                  {premium ? "IA active (FLUX.1-dev)" : "Mode démo (images d’inspiration)"}
+                </div>
               </div>
             </div>
-            {images.length ? (
-              <div style={{marginTop:8, fontSize:12, color:COLORS.muted}}>
-                Sélectionnés : <b>{selected.length}</b>
+
+            {/* boutons actions */}
+            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              <button onClick={generate} disabled={loading}
+                style={btnPrimary(loading ? "Génération…" : "Générer des visuels")}>
+                {loading ? "Génération…" : "Générer des visuels"}
+              </button>
+              <label style={toggleWrap()}>
+                <input type="checkbox" checked={premium} onChange={(e)=>setPremium(e.target.checked)} />
+                <span style={{ marginLeft: 8 }}>Qualité premium (IA)</span>
+              </label>
+            </div>
+
+            {/* images */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10, marginTop: 12 }}>
+              {(images.length ? images : PLACEHOLDERS).map((src, i) => (
+                <div key={i}
+                  style={{ background: "#111", borderRadius: 12, overflow: "hidden", border: "1px solid #2a2a2f" }}>
+                  <img src={src} alt={`visuel-${i}`} style={{ width: "100%", display: "block" }} />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Tailles du kit */}
+          <div style={{ background: card, borderRadius: 16, padding: 16 }}>
+            <h2 style={{ fontSize: 18, marginBottom: 10 }}>Tailles du kit</h2>
+
+            <div style={{ display: "grid", gap: 10 }}>
+              <label style={radioRow()}>
+                <input
+                  type="radio"
+                  checked={knowSizes}
+                  onChange={() => setKnowSizes(true)}
+                />
+                <span>Je connais ma taille (kit prêt à porter)</span>
+              </label>
+              <label style={radioRow()}>
+                <input
+                  type="radio"
+                  checked={!knowSizes}
+                  onChange={() => setKnowSizes(false)}
+                />
+                <span>Je ne connais pas / 100% sur-mesure</span>
+              </label>
+            </div>
+
+            {/* prêt-à-porter */}
+            {knowSizes && (
+              <>
+                <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+                  {["XS", "S", "M", "L", "XL"].map(s => (
+                    <Pill key={s} active={kitSize === s} onClick={() => setKitSize(s)}>{s}</Pill>
+                  ))}
+                </div>
+
+                {shownKitMeasures && kitSize !== "XS" && (
+                  <div style={{ marginTop: 10, color: textSoft, fontSize: 14 }}>
+                    <div style={{ marginBottom: 6, color: "#fff" }}>Tailles du kit {kitSize} (mm)</div>
+                    <table style={table()}>
+                      <thead>
+                        <tr>
+                          <th> </th><th>Pouce</th><th>Index</th><th>Majeur</th><th>Annulaire</th><th>Auriculaire</th>
+                        </tr>
+                      </thead>
+                      <tbody>
+                        <tr>
+                          <td>Gauche</td>
+                          {shownKitMeasures.L.map((v, i)=>(<td key={i}>{v}</td>))}
+                        </tr>
+                        <tr>
+                          <td>Droite</td>
+                          {shownKitMeasures.R.map((v, i)=>(<td key={i}>{v}</td>))}
+                        </tr>
+                      </tbody>
+                    </table>
+                  </div>
+                )}
+
+                <p style={{ marginTop: 8, color: textSoft }}>
+                  <b>Astuce mesure :</b> mesure la largeur au point le plus large de l’ongle (en mm).
+                  Entre deux tailles, choisis la plus petite pour une meilleure tenue. XS et XL dispo sur commande.
+                </p>
+              </>
+            )}
+
+            {/* sur-mesure */}
+            {!knowSizes && (
+              <div style={{ marginTop: 12 }}>
+                <div style={{ color: textSoft, marginBottom: 6 }}>
+                  Renseigne les largeurs (en mm) de chaque doigt — main gauche et main droite.
+                </div>
+                <div style={{ display: "grid", gap: 8 }}>
+                  <RowSizes
+                    title="Main gauche: [Pouce, Index, Majeur, Annulaire, Auriculaire]"
+                    values={sizesLeft}
+                    onChange={(arr)=>setSizesLeft(arr)}
+                  />
+                  <RowSizes
+                    title="Main droite: [Pouce, Index, Majeur, Annulaire, Auriculaire]"
+                    values={sizesRight}
+                    onChange={(arr)=>setSizesRight(arr)}
+                  />
+                </div>
+                <small style={{ color: textSoft }}>
+                  Astuce : place un ruban adhésif sur l’ongle, marque les bords, colle sur une règle et lis la largeur en mm.
+                </small>
               </div>
-            ) : null}
+            )}
+          </div>
+
+          {/* Notes + actions finales */}
+          <div style={{ background: card, borderRadius: 16, padding: 16 }}>
+            <h2 style={{ fontSize: 18, marginBottom: 8 }}>Notes / précisions</h2>
+            <textarea
+              value={notes}
+              onChange={(e)=>setNotes(e.target.value)}
+              rows={4}
+              placeholder="Habitudes, longueur max, allergies, etc."
+              style={{ width: "100%", background: "#121216", color: "#eaeaf0",
+                       border: "1px solid #2a2a2f", borderRadius: 12, padding: 12 }}
+            />
+
+            <div style={{ display: "flex", gap: 8, marginTop: 12, flexWrap: "wrap" }}>
+              <button onClick={exportPrint} style={btnGhost()}>Exporter (imprimer / PDF)</button>
+              <button onClick={sendEmail} style={btnPrimary()}>Envoyer par e-mail</button>
+            </div>
+          </div>
+
+          {/* zone imprimable */}
+          <div ref={printableRef} style={{ display: "none" }}>
+            <h1>Brief État d’Ongles</h1>
+            <div className="card">
+              <h2>Style</h2>
+              <div className="row">
+                <span className="pill">Forme : {shape}</span>
+                <span className="pill">Longueur : {length}</span>
+                <span className="pill">Couleurs : {colors}</span>
+                <span className="pill">Motifs : {motifs}</span>
+              </div>
+              {vibe ? <div className="pill">Ambiance : {vibe}</div> : null}
+              <h2>Prompt</h2>
+              <div className="card">{buildPrompt()}</div>
+              <h2>Tailles</h2>
+              {knowSizes ? (
+                <div>
+                  <div>Kit prêt-à-porter : {kitSize}</div>
+                  {shownKitMeasures && kitSize !== "XS" && (
+                    <table border="1" cellPadding="6" style={{ borderCollapse: "collapse", marginTop: 8 }}>
+                      <thead><tr><th></th><th>Pouce</th><th>Index</th><th>Majeur</th><th>Annulaire</th><th>Auriculaire</th></tr></thead>
+                      <tbody>
+                        <tr><td>Gauche</td>{shownKitMeasures.L.map((v,i)=>(<td key={i}>{v}</td>))}</tr>
+                        <tr><td>Droite</td>{shownKitMeasures.R.map((v,i)=>(<td key={i}>{v}</td>))}</tr>
+                      </tbody>
+                    </table>
+                  )}
+                </div>
+              ) : (
+                <div>
+                  <div>100% sur-mesure</div>
+                  <div>Gauche : {sizesLeft.join(", ")}</div>
+                  <div>Droite : {sizesRight.join(", ")}</div>
+                </div>
+              )}
+              {notes ? (<><h2>Notes</h2><div className="card">{notes}</div></>) : null}
+              {(images[0] || PLACEHOLDERS[0]) ? (
+                <>
+                  <h2>Aperçu</h2>
+                  <img src={images[0] || PLACEHOLDERS[0]} alt="visuel" />
+                </>
+              ) : null}
+            </div>
           </div>
         </div>
-      </main>
+
+        {/* toast */}
+        {toast && (
+          <div style={{
+            position: "fixed", left: 12, right: 12, bottom: 16, zIndex: 50,
+            background: "#1b1b20", border: "1px solid #2a2a2f", color:"#e8e8ef",
+            padding: "10px 12px", borderRadius: 12, textAlign: "center"
+          }}>{toast}</div>
+        )}
+      </div>
     </div>
   );
+
+  // --- petits composants/styles
+  function Field({ label, children }) {
+    return (
+      <label style={{ display: "grid", gap: 6 }}>
+        <span style={{ fontSize: 13, color: soft }}>{label}</span>
+        {children}
+      </label>
+    );
+  }
+  function inputStyle() {
+    return {
+      width: "100%",
+      background: "#121216",
+      color: "#eaeaf0",
+      border: "1px solid #2a2a2f",
+      borderRadius: 12,
+      padding: "10px 12px",
+    };
+  }
+  function btnPrimary(text) {
+    return {
+      background: "#e9bacb",
+      color: "#26161c",
+      border: "none",
+      borderRadius: 12,
+      padding: "10px 14px",
+      fontWeight: 800,
+    };
+  }
+  function btnGhost() {
+    return {
+      background: "#1b1b20",
+      color: "#e8e8ef",
+      border: "1px solid #2a2a2f",
+      borderRadius: 12,
+      padding: "10px 14px",
+      fontWeight: 700,
+    };
+  }
+  function radioRow() {
+    return { display: "flex", alignItems: "center", gap: 10, color: "#e7e7ee" };
+  }
+  function toggleWrap() {
+    return { display: "flex", alignItems: "center", gap: 8, color: "#e7e7ee" };
+  }
+  function table() {
+    return {
+      width: "100%",
+      borderCollapse: "collapse",
+      background: "#111",
+      borderRadius: 10,
+      overflow: "hidden",
+      border: "1px solid #2a2a2f",
+    };
+  }
 }
 
-/** ========= Petits composants UI ========= */
-function Card({children}) {
+function RowSizes({ title, values, onChange }) {
+  function setIdx(i, v) {
+    const a = [...values];
+    a[i] = v.replace(/[^\d]/g, ""); // garde seulement chiffres
+    onChange(a);
+  }
+  const labels = ["Pouce","Index","Majeur","Annulaire","Auriculaire"];
   return (
-    <div style={{
-      background:COLORS.card, border:`1px solid ${COLORS.border}`, borderRadius:16,
-      padding:12, marginBottom:12, boxShadow:"0 2px 8px rgba(0,0,0,0.03)"
-    }}>
-      {children}
-    </div>
-  );
-}
-function CardTitle({children}) {
-  return <div style={{fontSize:14, fontWeight:800, marginBottom:8}}>{children}</div>;
-}
-function Label({children}) { return <label style={{fontSize:12, fontWeight:700, marginTop:10, display:"block"}}>{children}</label>; }
-function Button({children, onClick, filled}) {
-  return (
-    <button onClick={onClick}
-      style={{
-        width:"100%", padding:12, borderRadius:14, cursor:"pointer",
-        border: filled ? "none" : `1px solid ${COLORS.border}`,
-        background: filled ? COLORS.primaryDark : COLORS.card,
-        color: filled ? "#1b1b1c" : COLORS.text,
-        fontWeight: 800
-      }}>
-      {children}
-    </button>
-  );
-}
-function SizesCard({title, values, onChange}) {
-  const setVal = (i, v) => { const copy=[...values]; copy[i]=v; onChange(copy); };
-  return (
-    <div style={{border:`1px solid ${COLORS.border}`, borderRadius:12, padding:10}}>
-      <div style={{fontSize:12, fontWeight:800, marginBottom:6}}>{title}</div>
-      {FINGERS.map((f,i)=>(
-        <div key={f} style={{display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:6}}>
-          <span style={{fontSize:12, width:90}}>{f}</span>
-          <input value={values[i]} onChange={e=>setVal(i,e.target.value)} placeholder="mm" inputMode="numeric"
-            style={{
-              width:80, background:COLORS.card, color:COLORS.text,
-              border:`1px solid ${COLORS.border}`, borderRadius:10, padding:8, fontSize:12
+    <div>
+      <div style={{ marginBottom: 6, color: "#f5e2e7" }}>{title}</div>
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 6 }}>
+        {values.map((v, i)=>(
+          <input key={i} inputMode="numeric" value={v} onChange={(e)=>setIdx(i,e.target.value)}
+            placeholder={labels[i]} style={{
+              width: "100%", background: "#121216", color: "#eaeaf0",
+              border: "1px solid #2a2a2f", borderRadius: 12, padding: "10px 12px", textAlign:"center"
             }}/>
-        </div>
-      ))}
+        ))}
+      </div>
     </div>
   );
-}
+    }
