@@ -1,0 +1,85 @@
+// pages/api/send-order.js
+import { Resend } from "resend";
+
+// Helper pour récupérer un binaire depuis une URL et le passer en Buffer
+async function fetchAsAttachment(url, filename = "image.jpg") {
+  try {
+    const res = await fetch(url);
+    if (!res.ok) throw new Error(`Fetch failed ${res.status}`);
+    const ab = await res.arrayBuffer();
+    const buf = Buffer.from(ab);
+    return { filename, content: buf };
+  } catch (_) {
+    return null; // si une image rate, on continue quand même
+  }
+}
+
+export default async function handler(req, res) {
+  if (req.method !== "POST") return res.status(405).json({ ok: false, error: "Method not allowed" });
+
+  try {
+    const {
+      brand = process.env.BRAND_NAME || "Commande Press-On",
+      customer,
+      brief,
+      prompt,
+      images = [], // URLs sélectionnées
+    } = req.body || {};
+
+    const resend = new Resend(process.env.RESEND_API_KEY);
+    const to = process.env.TO_EMAIL;
+
+    // Attachements (on limite à 6 img pour rester léger)
+    const atts = (
+      await Promise.all(
+        images.slice(0, 6).map((u, i) => fetchAsAttachment(u, `visuel-${i + 1}.jpg`))
+      )
+    ).filter(Boolean);
+
+    const html = `
+      <div style="font-family:Arial,Helvetica,sans-serif">
+        <h2>${brand} – Nouvelle demande</h2>
+        <h3>Infos cliente</h3>
+        <ul>
+          <li><b>Nom :</b> ${customer?.name || "-"}</li>
+          <li><b>Email :</b> ${customer?.email || "-"}</li>
+          <li><b>Téléphone :</b> ${customer?.phone || "-"}</li>
+          <li><b>Instagram :</b> ${customer?.instagram || "-"}</li>
+        </ul>
+
+        <h3>Brief</h3>
+        <ul>
+          <li><b>Forme :</b> ${brief?.shape || "-"}</li>
+          <li><b>Longueur :</b> ${brief?.length || "-"}</li>
+          <li><b>Couleurs :</b> ${brief?.colors || "-"}</li>
+          <li><b>Motifs :</b> ${brief?.motifs || "-"}</li>
+          <li><b>Ambiance :</b> ${brief?.vibe || "-"}</li>
+        </ul>
+
+        <h3>Tailles</h3>
+        <p>Gauche : ${brief?.sizesLeft?.join(" - ") || "-"}</p>
+        <p>Droite : ${brief?.sizesRight?.join(" - ") || "-"}</p>
+
+        ${brief?.notes ? `<h3>Notes</h3><p>${brief.notes}</p>` : ""}
+
+        <h3>Prompt généré</h3>
+        <pre style="white-space:pre-wrap;background:#f6f6f6;padding:10px;border-radius:8px;">${prompt || "-"}</pre>
+
+        <p>Nombre de visuels sélectionnés : <b>${images.length}</b></p>
+      </div>
+    `;
+
+    await resend.emails.send({
+      from: `${brand} <onboarding@resend.dev>`, // tu peux configurer un domaine Resend plus tard
+      to,
+      subject: `Nouvelle demande – ${customer?.name || "client(e)"}`,
+      html,
+      attachments: atts.length ? atts : undefined,
+    });
+
+    res.status(200).json({ ok: true });
+  } catch (e) {
+    console.error(e);
+    res.status(500).json({ ok: false, error: e?.message || "send failed" });
+  }
+}
