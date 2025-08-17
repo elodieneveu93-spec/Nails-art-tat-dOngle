@@ -1,74 +1,78 @@
 // pages/api/generate.js
 export default async function handler(req, res) {
-  if (req.method !== "POST") {
-    return res.status(405).json({ error: "Method not allowed" });
-  }
+  console.log("[/api/generate] call", req.method);
 
-  const {
-    prompt,
-    width = 768,
-    height = 1024,
-    guidance = 3,              // influence du prompt (2–6 conseillé)
-    num_inference_steps = 4,   // + rapide / coût réduit (tu peux monter à 8–12 si besoin)
-    seed,                      // optionnel : pour des résultats répétables
-  } = req.body || {};
-
-  if (!prompt || !prompt.trim()) {
-    return res.status(400).json({ error: "Le prompt est requis." });
-  }
-
-  if (!process.env.HF_TOKEN) {
-    return res.status(500).json({
-      error:
-        "HF_TOKEN manquant dans les variables d’environnement Vercel.",
+  // Petit ping de test: ouvre /api/generate dans ton navigateur
+  if (req.method === "GET") {
+    return res.status(200).json({
+      ok: true,
+      message: "ping",
+      hasToken: !!process.env.HF_TOKEN,
+      model: process.env.HF_MODEL || "black-forest-labs/FLUX.1-dev",
+      note: "POST /api/generate avec { prompt } pour générer."
     });
   }
 
-  const MODEL_ID = "black-forest-labs/FLUX.1-dev"; // gratuit (usage non commercial)
+  if (req.method !== "POST") {
+    return res.status(405).json({ error: "Méthode non autorisée" });
+  }
 
   try {
-    const response = await fetch(
-      `https://api-inference.huggingface.co/models/${MODEL_ID}`,
-      {
-        method: "POST",
-        headers: {
-          Authorization: `Bearer ${process.env.HF_TOKEN}`,
-          "Content-Type": "application/json",
-        },
-        body: JSON.stringify({
-          inputs: prompt,
-          parameters: {
-            width,
-            height,
-            guidance_scale: guidance,
-            num_inference_steps,
-            ...(seed ? { seed } : {}),
-          },
-          options: {
-            // démarre le modèle s’il “dort” et attends le résultat
-            wait_for_model: true,
-          },
-        }),
-      }
-    );
-
-    if (!response.ok) {
-      // Lis le message d’erreur renvoyé par l’API pour t’aider au debug
-      const details = await response.text();
-      return res.status(response.status).json({
-        error: `Erreur HuggingFace (${response.status})`,
-        details: details?.slice(0, 500),
-      });
+    const { prompt } = req.body || {};
+    if (!prompt || !prompt.trim()) {
+      return res.status(400).json({ error: "Prompt manquant" });
     }
 
-    // L’API renvoie directement l’image binaire -> on convertit en base64
-    const arrayBuffer = await response.arrayBuffer();
-    const base64 = Buffer.from(arrayBuffer).toString("base64");
-    const dataUrl = `data:image/png;base64,${base64}`;
+    const token = process.env.HF_TOKEN;
+    const model = process.env.HF_MODEL || "black-forest-labs/FLUX.1-dev";
 
-    return res.status(200).json({ image: dataUrl });
-  } catch (err) {
-    console.error(err);
-    return res.status(500).json({ error: err.message || "Erreur serveur" });
+    if (!token) {
+      console.error("HF_TOKEN manquant dans les variables d'env");
+      return res.status(500).json({ error: "HF_TOKEN non configuré côté serveur" });
+    }
+
+    const url = `https://api-inference.huggingface.co/models/${model}`;
+    console.log("[HF] POST", url);
+
+    const hfRes = await fetch(url, {
+      method: "POST",
+      headers: {
+        Authorization: `Bearer ${token}`,
+        "Content-Type": "application/json",
+        Accept: "*/*"
+      },
+      body: JSON.stringify({ inputs: prompt })
+    });
+
+    console.log("[HF] status", hfRes.status, hfRes.statusText);
+    const ct = hfRes.headers.get("content-type") || "";
+
+    if (!hfRes.ok) {
+      const errText = await hfRes.text();
+      console.error("[HF] error body:", errText?.slice(0, 800));
+      return res
+        .status(hfRes.status)
+        .json({ error: `HF ${hfRes.status} ${hfRes.statusText}`, details: errText });
+    }
+
+    // Certains modèles renvoient du binaire (image)
+    if (ct.includes("image/") || ct.includes("octet-stream")) {
+      const buf = Buffer.from(await hfRes.arrayBuffer());
+      const b64 = `data:image/png;base64,${buf.toString("base64")}`;
+      return res.status(200).json({ image: b64 });
+    }
+
+    // D'autres renvoient du JSON (rare pour les modèles d'image)
+    const data = await hfRes.json().catch(async () => {
+      const txt = await hfRes.text();
+      console.warn("[HF] JSON parse fail, raw:", txt?.slice(0, 800));
+      return { raw: txt };
+    });
+
+    console.log("[HF] json keys:", Object.keys(data || {}));
+    return res.status(200).json({ data });
+  } catch (e) {
+    console.error("[/api/generate] server error:", e);
+    return res.status(500).json({ error: e.message || "Erreur serveur inconnue" });
   }
 }
