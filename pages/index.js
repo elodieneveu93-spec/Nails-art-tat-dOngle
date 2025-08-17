@@ -1,9 +1,14 @@
 // pages/index.js
-import { useMemo, useState } from "react";
+import { useState, useMemo } from "react";
 
-/* ----------------------- Données & utilitaires ----------------------- */
+/* -------------------------------------------------------
+   Données utiles
+--------------------------------------------------------*/
 
-// Tableau des tailles de kits (en mm)
+// Ta marque en haut
+const BRAND = "État d’Ongles";
+
+// Valeurs XS–XL (en mm) issues de ton tableau
 const KIT_SIZES = {
   XS: { pouce: 14, index: 10, majeur: 11, annulaire: 10, auriculaire: 7 },
   S:  { pouce: 15, index: 11, majeur: 11, annulaire: 11, auriculaire: 8 },
@@ -12,128 +17,59 @@ const KIT_SIZES = {
   XL: { pouce: 18, index: 14, majeur: 15, annulaire: 14, auriculaire: 11 },
 };
 
-// Préréglages “idées en 1 clic”
-const PRESETS = [
-  {
-    label: "Doux & poétique",
-    shape: "amande",
-    length: "moyenne",
-    colors: "bleu pastel, nude rosé",
-    motifs: "petites fleurs blanches, paillettes très fines",
-    vibe: "léger, romantique, lumineux",
-  },
-  {
-    label: "Glam rock",
-    shape: "coffin court",
-    length: "courte",
-    colors: "noir mat, chrome argent",
-    motifs: "french inversée fine, accents métalliques",
-    vibe: "audacieux, soirée, edgy",
-  },
-  {
-    label: "Minimal chic",
-    shape: "ovale court",
-    length: "courte",
-    colors: "nude beige, blanc",
-    motifs: "french fine, demi-lune",
-    vibe: "propre, bureau, quotidien",
-  },
-  {
-    label: "Mariée lumineuse",
-    shape: "amande",
-    length: "longue",
-    colors: "lilas très pâle, blanc nacré",
-    motifs: "micro paillettes, strass discrets",
-    vibe: "élégant, photo-friendly",
-  },
-  {
-    label: "Pastel romantique",
-    shape: "amande",
-    length: "moyenne",
-    colors: "rose poudré, lilas, ivoire",
-    motifs: "dégradé soft, fleur",
-    vibe: "printemps, doux",
-  },
-  {
-    label: "Classique nude",
-    shape: "ovale",
-    length: "moyenne",
-    colors: "nude rosé, blanc doux",
-    motifs: "french",
-    vibe: "sobre, intemporel",
-  },
-];
+const FINGERS = ["pouce", "index", "majeur", "annulaire", "auriculaire"];
 
-// Construit le prompt IA à partir du state
-function buildPrompt(state) {
-  const parts = [
-    "Photo réaliste d'un nuancier de press-on nails présenté sur une planche en bois clair, lumière douce studio, focus sur les tips, style e-commerce.",
-    `Forme: ${state.shape || "amande"} • Longueur: ${state.length || "moyenne"} •`,
-    `Couleurs: ${state.colors || "nude, blanc"} •`,
-    `Motifs/déco: ${state.motifs || "french fine"} •`,
-    "Pas de logos/licences; rendu propre; arrière-plan doux; prise de vue verticale.",
-  ];
-
-  if (state.vibe) parts.push(`Ambiance: ${state.vibe}`);
-  return parts.join(" ");
-}
-
-/* ---------------------------- Composant UI ---------------------------- */
+/* -------------------------------------------------------
+   Page
+--------------------------------------------------------*/
 
 export default function Home() {
-  // état principal du configurateur
-  const [shape, setShape] = useState("amande");
-  const [length, setLength] = useState("moyenne");
-  const [colors, setColors] = useState("");
-  const [motifs, setMotifs] = useState("");
-  const [vibe, setVibe] = useState("");
+  // ---- État principal
+  const [shape, setShape] = useState("ovale");
+  const [length, setLength] = useState("courte");
+  const [colors, setColors] = useState("bleu roi, jaune");
+  const [motifs, setMotifs] = useState("fleur");
+  const [vibe, setVibe] = useState("propre, e-commerce");
 
-  // tailles
-  const [knowSize, setKnowSize] = useState(true); // true = kit prêt-à-porter, false = sur-mesure
-  const [kitSize, setKitSize] = useState("XS");
+  // Tailles : mode “je connais ma taille” ou “sur-mesure”
+  const [knowSizes, setKnowSizes] = useState(true);
+  const [kitSizeChoice, setKitSizeChoice] = useState("XS");
   const [customLeft, setCustomLeft] = useState({ pouce: "", index: "", majeur: "", annulaire: "", auriculaire: "" });
   const [customRight, setCustomRight] = useState({ pouce: "", index: "", majeur: "", annulaire: "", auriculaire: "" });
 
-  // notes & images
+  // Notes libres
   const [notes, setNotes] = useState("");
+
+  // Images générées (démo)
   const [images, setImages] = useState([]);
   const [loading, setLoading] = useState(false);
 
-  // prompt calculé
-  const stateForPrompt = useMemo(
-    () => ({ shape, length, colors, motifs, vibe }),
-    [shape, length, colors, motifs, vibe]
-  );
-  const prompt = useMemo(() => buildPrompt(stateForPrompt), [stateForPrompt]);
+  // ---- Texte “prompt” affiché pour transparence
+  const prompt = useMemo(() => {
+    return [
+      `Photo réaliste d'un nuancier de press-on nails sur planche bois clair, lumière douce studio, focus sur les tips, style e-commerce.`,
+      `Forme: ${cap(shape)} • Longueur: ${cap(length)} •`,
+      `Couleurs: ${colors} • Motifs/déco: ${cap(motifs)} • Ambiance: ${vibe}.`,
+      `Pas de logos/licences; rendu propre.`
+    ].join(" ");
+  }, [shape, length, colors, motifs, vibe]);
 
-  // applique un preset
-  function applyPreset(p) {
-    setShape(p.shape || "");
-    setLength(p.length || "");
-    setColors(p.colors || "");
-    setMotifs(p.motifs || "");
-    setVibe(p.vibe || "");
-  }
+  /* -------------------------------------------------------
+     Actions
+  --------------------------------------------------------*/
 
-  // appel API → /api/generate (côté serveur)
+  // Démo : appelle /api/generate et reçoit 3 images
   async function handleGenerate() {
-    setLoading(true);
     try {
-      const r = await fetch("/api/generate", {
-        method: "POST",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify({
-          prompt,
-          // tu peux ajuster ces paramètres si tu veux
-          width: 768,
-          height: 1024,
-          guidance: 3,
-          num_inference_steps: 4,
-        }),
-      });
-      const data = await r.json();
-      if (!r.ok) throw new Error(data?.error || "Erreur API");
-      setImages((prev) => [data.image, ...prev]);
+      setLoading(true);
+      const out = [];
+      for (let i = 0; i < 3; i++) {
+        const r = await fetch("/api/generate", { method: "POST" });
+        if (!r.ok) throw new Error("L’API /api/generate a échoué.");
+        const blob = await r.blob(); // image binaire
+        out.push(URL.createObjectURL(blob)); // URL locale pour <img>
+      }
+      setImages(out);
     } catch (e) {
       alert("Génération échouée : " + e.message);
     } finally {
@@ -141,307 +77,389 @@ export default function Home() {
     }
   }
 
-  // rendu d’un mini “chip” préréglage
-  function PresetChip({ p }) {
-    return (
-      <button
-        onClick={() => applyPreset(p)}
-        style={styles.presetChip}
-      >
-        <div style={{ fontWeight: 700 }}>{p.label}</div>
-        <div style={styles.presetSub}>{p.shape} • {p.length}</div>
-        <div style={styles.presetSub}>{p.colors}</div>
-      </button>
-    );
+  // Prépare un mailto avec toutes les infos
+  function handleEmail() {
+    const subject = encodeURIComponent(`Brief Press-On – ${BRAND}`);
+    const bodyLines = [];
+
+    bodyLines.push(`💅 ${BRAND} — Brief du kit`);
+    bodyLines.push("");
+    bodyLines.push(`Forme: ${shape}`);
+    bodyLines.push(`Longueur: ${length}`);
+    bodyLines.push(`Couleurs: ${colors}`);
+    bodyLines.push(`Motifs/déco: ${motifs}`);
+    bodyLines.push(`Ambiance: ${vibe}`);
+    bodyLines.push("");
+
+    if (knowSizes) {
+      bodyLines.push(`Tailles du kit prêt-à-porter: ${kitSizeChoice}`);
+      const k = KIT_SIZES[kitSizeChoice];
+      bodyLines.push(`(mm) Pouce:${k.pouce}, Index:${k.index}, Majeur:${k.majeur}, Annulaire:${k.annulaire}, Auriculaire:${k.auriculaire}`);
+    } else {
+      bodyLines.push("Tailles sur-mesure (mm) :");
+      bodyLines.push(`Main gauche → Pouce:${customLeft.pouce}, Index:${customLeft.index}, Majeur:${customLeft.majeur}, Annulaire:${customLeft.annulaire}, Auriculaire:${customLeft.auriculaire}`);
+      bodyLines.push(`Main droite → Pouce:${customRight.pouce}, Index:${customRight.index}, Majeur:${customRight.majeur}, Annulaire:${customRight.annulaire}, Auriculaire:${customRight.auriculaire}`);
+    }
+
+    if (notes.trim()) {
+      bodyLines.push("");
+      bodyLines.push("Notes / précisions :");
+      bodyLines.push(notes.trim());
+    }
+
+    bodyLines.push("");
+    bodyLines.push("Aperçu prompt :");
+    bodyLines.push(prompt);
+    bodyLines.push("");
+    bodyLines.push("(Les visuels de démo sont visibles sur la page ; ils ne peuvent pas être joints via e-mail automatiquement.)");
+
+    const body = encodeURIComponent(bodyLines.join("\n"));
+    // 👉 change l’adresse e-mail ci-dessous !
+    window.location.href = `mailto:bonjour@etatdongles.fr?subject=${subject}&body=${body}`;
   }
 
-  // rendu du tableau de taille pour le kit
-  function KitTable({ sizeKey }) {
-    const s = KIT_SIZES[sizeKey];
-    if (!s) return null;
-    return (
-      <div style={styles.kitTable}>
-        <div style={styles.kitRow}><b>Pouce</b><span>{s.pouce} mm</span></div>
-        <div style={styles.kitRow}><b>Index</b><span>{s.index} mm</span></div>
-        <div style={styles.kitRow}><b>Majeur</b><span>{s.majeur} mm</span></div>
-        <div style={styles.kitRow}><b>Annulaire</b><span>{s.annulaire} mm</span></div>
-        <div style={styles.kitRow}><b>Auriculaire</b><span>{s.auriculaire} mm</span></div>
-      </div>
-    );
-  }
-
-  function renderCustomInputs(hand, values, setValues) {
-    return (
-      <div style={{ marginTop: 6 }}>
-        <div style={{ fontWeight: 600, marginBottom: 6 }}>{hand}</div>
-        <div style={styles.customGrid}>
-          {["pouce","index","majeur","annulaire","auriculaire"].map((k) => (
-            <label key={k} style={styles.customCell}>
-              <span style={styles.customLabel}>{k}</span>
-              <input
-                inputMode="numeric"
-                placeholder="mm"
-                value={values[k]}
-                onChange={(e) => setValues({ ...values, [k]: e.target.value })}
-                style={styles.input}
-              />
-            </label>
-          ))}
-        </div>
-      </div>
-    );
-  }
+  /* -------------------------------------------------------
+     Rendu
+  --------------------------------------------------------*/
 
   return (
-    <div style={styles.page}>
-      {/* Bandeau titre */}
-      <header style={styles.header}>
-        <div style={styles.brand}>État d’Ongles</div>
-        <div style={styles.subtitle}>Crée ton kit <i>Press-On</i> personnalisé</div>
+    <div style={s.page}>
+      {/* Bandeau marque */}
+      <header style={s.header}>
+        <div style={s.brand}>{BRAND}</div>
+        <div style={s.tagline}>Crée ton kit <em>Press-On</em> personnalisé</div>
       </header>
 
-      {/* Carte principale */}
-      <div style={styles.card}>
-        <section style={{ marginBottom: 18 }}>
-          <div style={styles.sectionTitle}>Préréglages (idées en 1 clic)</div>
-          <div style={styles.presetWrap}>
-            {PRESETS.map((p) => <PresetChip key={p.label} p={p} />)}
+      <main style={s.main}>
+
+        {/* SECTION STYLES */}
+        <section style={s.card}>
+          <h2 style={s.h2}>Style & couleurs</h2>
+
+          <div style={s.row}>
+            <label style={s.label}>Forme</label>
+            <select value={shape} onChange={e=>setShape(e.target.value)} style={s.input}>
+              <option value="ovale">ovale</option>
+              <option value="amande">amande</option>
+              <option value="coffin court">coffin court</option>
+              <option value="stiletto">stiletto</option>
+            </select>
+          </div>
+
+          <div style={s.row}>
+            <label style={s.label}>Longueur</label>
+            <select value={length} onChange={e=>setLength(e.target.value)} style={s.input}>
+              <option value="courte">courte</option>
+              <option value="moyenne">moyenne</option>
+              <option value="longue">longue</option>
+            </select>
+          </div>
+
+          <div style={s.row}>
+            <label style={s.label}>Couleurs (libre)</label>
+            <input value={colors} onChange={e=>setColors(e.target.value)} placeholder="ex: nude rosé, lilas pâle, blanc nacré" style={s.input}/>
+          </div>
+
+          <div style={s.row}>
+            <label style={s.label}>Motifs / déco</label>
+            <input value={motifs} onChange={e=>setMotifs(e.target.value)} placeholder="ex: french fine, fleurs, paillettes fines" style={s.input}/>
+          </div>
+
+          <div style={s.row}>
+            <label style={s.label}>Ambiance / vibe</label>
+            <input value={vibe} onChange={e=>setVibe(e.target.value)} placeholder="ex: propre, e-commerce, lumineux" style={s.input}/>
           </div>
         </section>
 
-        {/* Choix stylistiques */}
-        <section style={styles.formRow}>
-          <div style={styles.label}>Forme</div>
-          <input value={shape} onChange={(e) => setShape(e.target.value)} style={styles.input} />
-        </section>
-        <section style={styles.formRow}>
-          <div style={styles.label}>Longueur</div>
-          <input value={length} onChange={(e) => setLength(e.target.value)} style={styles.input} />
-        </section>
-        <section style={styles.formRow}>
-          <div style={styles.label}>Couleurs</div>
-          <input value={colors} onChange={(e) => setColors(e.target.value)} placeholder="ex: nude rosé, blanc doux" style={styles.input} />
-        </section>
-        <section style={styles.formRow}>
-          <div style={styles.label}>Motifs / déco</div>
-          <input value={motifs} onChange={(e) => setMotifs(e.target.value)} placeholder="ex: french fine, fleur..." style={styles.input} />
-        </section>
-        <section style={styles.formRow}>
-          <div style={styles.label}>Ambiance (facultatif)</div>
-          <input value={vibe} onChange={(e) => setVibe(e.target.value)} placeholder="ex: romantique, lumineux..." style={styles.input} />
+        {/* SECTION PROMPT */}
+        <section style={s.card}>
+          <h2 style={s.h2}>Prompt généré (aperçu)</h2>
+          <textarea value={prompt} readOnly rows={5} style={s.textarea}/>
         </section>
 
-        {/* Prompt aperçu */}
-        <section style={{ marginTop: 18 }}>
-          <div style={styles.sectionTitle}>Prompt généré (aperçu)</div>
-          <textarea value={prompt} readOnly rows={5} style={styles.textarea} />
-        </section>
+        {/* SECTION TAILLES */}
+        <section style={s.card}>
+          <h2 style={s.h2}>Tailles du kit</h2>
 
-        {/* Tailles */}
-        <section style={{ marginTop: 18 }}>
-          <div style={styles.sectionTitle}>Tailles du kit</div>
+          <div style={{...s.row, alignItems:"center", gap:12}}>
+            <label style={s.radio}>
+              <input
+                type="radio"
+                checked={knowSizes}
+                onChange={()=>setKnowSizes(true)}
+              />
+              <span>Je connais ma taille (kit prêt à porter)</span>
+            </label>
+          </div>
 
-          <label style={styles.radioLine}>
-            <input
-              type="radio"
-              checked={knowSize}
-              onChange={() => setKnowSize(true)}
-              style={styles.radio}
-            />
-            <span>Je connais ma taille (kit prêt à porter)</span>
-          </label>
+          <div style={{...s.row, alignItems:"center", gap:12}}>
+            <label style={s.radio}>
+              <input
+                type="radio"
+                checked={!knowSizes}
+                onChange={()=>setKnowSizes(false)}
+              />
+              <span>Je ne connais pas / 100% sur-mesure</span>
+            </label>
+          </div>
 
-          <label style={styles.radioLine}>
-            <input
-              type="radio"
-              checked={!knowSize}
-              onChange={() => setKnowSize(false)}
-              style={styles.radio}
-            />
-            <span>Je ne connais pas / 100% sur-mesure</span>
-          </label>
-
-          {knowSize ? (
+          {knowSizes ? (
             <>
-              <div style={styles.sizeRow}>
-                {["XS","S","M","L","XL"].map((k) => (
+              <div style={s.kitRow}>
+                {["XS","S","M","L","XL"].map(k => (
                   <button
                     key={k}
-                    onClick={() => setKitSize(k)}
-                    style={{
-                      ...styles.sizeBtn,
-                      ...(kitSize === k ? styles.sizeBtnActive : {}),
-                    }}
+                    onClick={()=>setKitSizeChoice(k)}
+                    style={{...s.kitBtn, ...(kitSizeChoice===k?s.kitBtnActive:{})}}
                   >
                     {k}
                   </button>
                 ))}
               </div>
-              <KitTable sizeKey={kitSize} />
-              <div style={styles.hint}>
-                <b>Astuce mesure :</b> mesure la largeur au point le plus large de l’ongle (en mm).
-                Entre deux tailles, choisis la plus petite pour une meilleure tenue.
-                XS et XL disponibles sur commande.
+
+              <div style={s.hintBox}>
+                <b>Astuce mesure</b> : mesure la largeur au point le plus large de l’ongle (en mm). Entre deux tailles, choisis la plus
+                petite pour une meilleure tenue. XS et XL disponibles sur commande.
+              </div>
+
+              {/* tableau lecture seule des tailles */}
+              <div style={s.sizeTable}>
+                {FINGERS.map((f,i)=>(
+                  <div key={f} style={s.sizeRow}>
+                    <div style={s.sizeCellLeft}>{cap(f)}</div>
+                    <div style={s.sizeCellRight}>{KIT_SIZES[kitSizeChoice][f]} mm</div>
+                  </div>
+                ))}
               </div>
             </>
           ) : (
             <>
-              {renderCustomInputs("Main gauche", customLeft, setCustomLeft)}
-              {renderCustomInputs("Main droite", customRight, setCustomRight)}
-              <div style={styles.hint}>
-                <b>Comment mesurer ?</b> colle un morceau de scotch sur l’ongle, trace les bords,
-                colle sur une règle et lis la largeur en mm. Prends la valeur la plus large.
+              <div style={s.hintBox}>
+                <b>Comment mesurer ?</b> Place un ruban millimétré (ou papier + règle) sur la partie la plus large de l’ongle, note la
+                largeur en mm. Fais chaque doigt pour les deux mains.
+              </div>
+
+              <div style={s.flexCols}>
+                <div style={s.flexCol}>
+                  <h4 style={s.h4}>Main gauche</h4>
+                  {FINGERS.map((f)=>(
+                    <div style={s.row} key={"L"+f}>
+                      <label style={s.label}>{cap(f)}</label>
+                      <input
+                        style={s.input}
+                        inputMode="numeric"
+                        placeholder="mm"
+                        value={customLeft[f]}
+                        onChange={e=>setCustomLeft({...customLeft, [f]: e.target.value})}
+                      />
+                    </div>
+                  ))}
+                </div>
+
+                <div style={s.flexCol}>
+                  <h4 style={s.h4}>Main droite</h4>
+                  {FINGERS.map((f)=>(
+                    <div style={s.row} key={"R"+f}>
+                      <label style={s.label}>{cap(f)}</label>
+                      <input
+                        style={s.input}
+                        inputMode="numeric"
+                        placeholder="mm"
+                        value={customRight[f]}
+                        onChange={e=>setCustomRight({...customRight, [f]: e.target.value})}
+                      />
+                    </div>
+                  ))}
+                </div>
               </div>
             </>
           )}
         </section>
 
-        {/* Notes */}
-        <section style={{ marginTop: 18 }}>
-          <div style={styles.sectionTitle}>Notes / précisions</div>
+        {/* NOTES + ACTIONS */}
+        <section style={s.card}>
+          <h2 style={s.h2}>Notes / précisions</h2>
           <textarea
-            value={notes}
-            onChange={(e) => setNotes(e.target.value)}
+            style={s.textarea}
             placeholder="Habitudes, longueur max, allergies, etc."
-            rows={4}
-            style={styles.textarea}
+            rows={5}
+            value={notes}
+            onChange={e=>setNotes(e.target.value)}
           />
-        </section>
 
-        {/* Actions */}
-        <section style={{ marginTop: 18, display: "flex", gap: 12, flexWrap: "wrap" }}>
-          <button onClick={handleGenerate} disabled={loading} style={styles.primaryBtn}>
-            {loading ? "Génération en cours..." : "Générer un visuel IA"}
-          </button>
-          {/* Tu peux remettre ici tes boutons “PDF” et “Envoyer par e-mail” si besoin */}
-        </section>
-      </div>
-
-      {/* Galerie */}
-      {images.length > 0 && (
-        <div style={{ ...styles.card, marginTop: 16 }}>
-          <div style={styles.sectionTitle}>Aperçus générés</div>
-          <div style={styles.gallery}>
-            {images.map((src, i) => (
-              <img key={i} src={src} alt={`gen-${i}`} style={styles.galleryImg} />
-            ))}
+          <div style={s.actions}>
+            <button onClick={handleGenerate} disabled={loading} style={s.primary}>
+              {loading ? "Je prépare des visuels…" : "Générer des visuels (démo)"}
+            </button>
+            <button onClick={handleEmail} style={s.secondary}>Envoyer par e-mail</button>
           </div>
-        </div>
-      )}
+        </section>
+
+        {/* GALERIE */}
+        {images.length > 0 && (
+          <section style={s.card}>
+            <h2 style={s.h2}>Visuels de démo</h2>
+            <div style={s.gallery}>
+              {images.map((src, i)=>(
+                <img key={i} src={src} alt={`demo-${i}`} style={s.img}/>
+              ))}
+            </div>
+          </section>
+        )}
+
+        <footer style={s.footer}>
+          Prototype — pas d’IA en temps réel (images de démonstration).
+        </footer>
+      </main>
     </div>
   );
 }
 
-/* ------------------------------- Styles ------------------------------- */
+/* -------------------------------------------------------
+   Helpers & styles
+--------------------------------------------------------*/
 
-const styles = {
+function cap(s) {
+  if (!s) return "";
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+const softBg = "#fff7fa";      // rose poudré très léger
+const softCard = "rgba(255,255,255,0.85)";
+const softText = "#3a2e2f";     // brun doux
+const accent = "#d88aa1";       // vieux rose
+const accentDark = "#c1738d";
+const border = "#edd7de";
+
+const s = {
   page: {
     minHeight: "100vh",
-    background:
-      "linear-gradient(180deg, #FFF6F8 0%, #F9F6FF 60%, #F5FBFF 100%)", // doux & mobile-friendly
-    padding: "16px 12px 80px",
-    fontFamily: "ui-sans-serif, system-ui, -apple-system, Segoe UI, Roboto, Arial",
-    color: "#2a2a2a",
+    background: `linear-gradient(180deg, ${softBg}, #ffffff)`,
+    color: softText,
+    fontFamily: "system-ui, -apple-system, Segoe UI, Roboto, sans-serif",
   },
-  header: { margin: "4px auto 12px", maxWidth: 820 },
+  header: {
+    padding: "20px 16px 8px",
+    textAlign: "center",
+  },
   brand: {
     fontWeight: 800,
-    fontSize: 20,
-    letterSpacing: 0.2,
+    fontSize: 22,
+    letterSpacing: 0.3,
   },
-  subtitle: {
-    marginTop: 4,
-    fontSize: 28,
-    fontWeight: 800,
-    lineHeight: 1.1,
+  tagline: {
+    opacity: 0.8,
+    marginTop: 6,
+  },
+  main: {
+    maxWidth: 560,
+    margin: "0 auto",
+    padding: 16,
   },
   card: {
-    background: "rgba(255,255,255,0.8)",
-    backdropFilter: "blur(6px)",
-    border: "1px solid #f0e9f0",
-    borderRadius: 18,
-    padding: 14,
-    maxWidth: 820,
-    margin: "0 auto",
-    boxShadow: "0 6px 24px rgba(60, 30, 100, 0.08)",
+    background: softCard,
+    border: `1px solid ${border}`,
+    borderRadius: 16,
+    padding: 16,
+    marginBottom: 16,
+    boxShadow: "0 8px 24px rgba(0,0,0,0.05)",
+    backdropFilter: "blur(4px)",
   },
-  sectionTitle: { fontWeight: 800, marginBottom: 8 },
-  presetWrap: { display: "grid", gap: 8, gridTemplateColumns: "repeat(2, 1fr)" },
-  presetChip: {
-    textAlign: "left",
-    padding: 10,
-    borderRadius: 14,
-    border: "1px solid #eee3ef",
-    background: "#fff",
+  h2: { margin: "0 0 10px 0", fontSize: 18 },
+  h4: { margin: "4px 0 8px 0", fontSize: 14, opacity: 0.8 },
+  row: {
+    display: "flex",
+    gap: 10,
+    alignItems: "center",
+    marginBottom: 10,
   },
-  presetSub: { opacity: 0.7, fontSize: 12, marginTop: 2 },
-  formRow: { marginTop: 10 },
-  label: { fontSize: 13, opacity: 0.7, marginBottom: 4 },
+  label: { width: 110, fontSize: 14, opacity: 0.9 },
   input: {
-    width: "100%",
+    flex: 1,
+    border: `1px solid ${border}`,
+    borderRadius: 10,
     padding: "10px 12px",
-    borderRadius: 12,
-    border: "1px solid #e8dfea",
     background: "#fff",
-    outline: "none",
+    fontSize: 14,
   },
   textarea: {
     width: "100%",
-    padding: "10px 12px",
+    border: `1px solid ${border}`,
     borderRadius: 12,
-    border: "1px solid #e8dfea",
+    padding: 12,
+    fontSize: 14,
     background: "#fff",
-    outline: "none",
   },
-  radioLine: { display: "flex", alignItems: "center", gap: 8, margin: "6px 0" },
-  radio: { width: 18, height: 18 },
-  sizeRow: { display: "flex", gap: 8, marginTop: 8, flexWrap: "wrap" },
-  sizeBtn: {
-    padding: "10px 16px",
-    borderRadius: 16,
-    border: "1px solid #e6d7ea",
+  radio: { display: "flex", alignItems: "center", gap: 8, fontSize: 14 },
+  kitRow: { display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8, marginBottom: 8 },
+  kitBtn: {
     background: "#fff",
+    border: `1px solid ${border}`,
+    borderRadius: 12,
+    padding: "10px 16px",
     fontWeight: 700,
   },
-  sizeBtnActive: { background: "#f4e6f0" },
-  kitTable: {
-    marginTop: 10,
-    border: "1px solid #efe4f0",
-    borderRadius: 14,
+  kitBtnActive: {
+    background: accent,
+    color: "#fff",
+    borderColor: accent,
+  },
+  hintBox: {
+    fontSize: 13,
+    background: "#fff",
+    padding: 10,
+    borderRadius: 10,
+    border: `1px dashed ${border}`,
+    marginTop: 4,
+    marginBottom: 10,
+  },
+  sizeTable: {
+    border: `1px solid ${border}`,
+    borderRadius: 12,
     overflow: "hidden",
   },
-  kitRow: {
+  sizeRow: {
     display: "flex",
-    justifyContent: "space-between",
-    padding: "8px 12px",
-    borderTop: "1px solid #f4ecf4",
+    borderTop: `1px solid ${border}`,
   },
-  hint: { marginTop: 8, fontSize: 13, opacity: 0.8 },
-  customGrid: {
-    display: "grid",
-    gridTemplateColumns: "repeat(5, 1fr)",
-    gap: 8,
-  },
-  customCell: { display: "flex", flexDirection: "column", gap: 4 },
-  customLabel: { fontSize: 12, opacity: 0.7 },
-  primaryBtn: {
-    padding: "12px 16px",
+  sizeCellLeft: { flex: 1, padding: 10, background: "#fff", fontWeight: 600 },
+  sizeCellRight: { width: 120, padding: 10, textAlign: "right", background: "#fff" },
+  flexCols: { display: "flex", gap: 12, flexWrap: "wrap" },
+  flexCol: { flex: 1, minWidth: 240 },
+  actions: { display: "flex", gap: 10, flexWrap: "wrap", marginTop: 12 },
+  primary: {
+    background: accent,
+    color: "#fff",
+    border: "none",
     borderRadius: 14,
-    background: "#e7b2c2",
-    color: "#222",
-    border: "1px solid #e1a9bb",
-    fontWeight: 800,
+    padding: "12px 16px",
+    fontWeight: 700,
+  },
+  secondary: {
+    background: "#fff",
+    color: softText,
+    border: `1px solid ${border}`,
+    borderRadius: 14,
+    padding: "12px 16px",
+    fontWeight: 700,
   },
   gallery: {
     display: "grid",
-    gridTemplateColumns: "repeat(2, 1fr)",
+    gridTemplateColumns: "repeat(3, 1fr)",
     gap: 8,
-    marginTop: 10,
   },
-  galleryImg: {
+  img: {
     width: "100%",
-    borderRadius: 14,
-    border: "1px solid #f0e6f1",
-    display: "block",
+    height: 120,
+    objectFit: "cover",
+    borderRadius: 12,
+    border: `1px solid ${border}`,
+    background: "#fff",
+  },
+  footer: {
+    textAlign: "center",
+    fontSize: 12,
+    opacity: 0.7,
+    marginBottom: 24,
   },
 };
