@@ -39,14 +39,64 @@ const PLACEHOLDERS = [
 ];
 
 // ---------- TABLEAU TAILLES PRE-SET (mm) ----------
-const SIZE_PRESETS = {
-  XS:  { left: [14,10,11,10,7],  right: [14,10,11,10,7] },
-  S:   { left: [15,11,11,11,8],  right: [15,11,11,11,8] },
-  M:   { left: [16,12,13,12,9],  right: [16,12,13,12,9] },
-  L:   { left: [17,13,14,13,10], right: [17,13,14,13,10] },
-  XL:  { left: [18,14,15,14,11], right: [18,14,15,14,11] },
-};
-const FINGERS = ["Pouce","Index","Majeur","Annulaire","Auriculaire"];
+const {sizeMode === "preset" && (
+  <>
+    {/* radios XS–XL */}
+    <div style={{ display:"grid", gridTemplateColumns:"repeat(5,1fr)", gap:8, marginTop:10 }}>
+      {["XS","S","M","L","XL"].map((t)=>(
+        <label key={t}
+          style={{
+            border:`1px solid ${COLORS.border}`, borderRadius:12, padding:"10px 8px",
+            textAlign:"center", cursor:"pointer",
+            background: kitSize===t ? COLORS.primary : COLORS.card,
+            color: kitSize===t ? "#1b1b1c" : COLORS.text,
+            fontWeight:700, fontSize:13
+          }}>
+          <input type="radio" name="kitSize" checked={kitSize===t}
+            onChange={()=>setKitSize(t)} style={{ display:"none" }} />
+          {t}
+        </label>
+      ))}
+    </div>
+
+    {/* récap des tailles du kit sélectionné */}
+    {SIZE_PRESETS[kitSize] && (
+      <div style={{
+        marginTop:10, border:`1px solid ${COLORS.border}`, borderRadius:12, padding:10,
+        background: COLORS.card
+      }}>
+        <div style={{ fontSize:12, fontWeight:800, marginBottom:8 }}>
+          Détails du kit <span style={{ color:"#9C5D73" }}>{kitSize}</span> (mm)
+        </div>
+
+        {/* tableau simple responsive */}
+        <div style={{ display:"grid", gridTemplateColumns:"auto 1fr 1fr", gap:8, fontSize:12 }}>
+          <div style={{ fontWeight:700 }}></div>
+          <div style={{ fontWeight:700, textAlign:"center" }}>Main gauche</div>
+          <div style={{ fontWeight:700, textAlign:"center" }}>Main droite</div>
+
+          {FINGERS.map((f, i) => (
+            <Fragment key={f}>
+              <div style={{ color: COLORS.muted }}>{f}</div>
+              <div style={{
+                textAlign:"center", padding:"6px 8px", border:`1px solid ${COLORS.border}`,
+                borderRadius:10
+              }}>
+                {SIZE_PRESETS[kitSize].left[i]} mm
+              </div>
+              <div style={{
+                textAlign:"center", padding:"6px 8px", border:`1px solid ${COLORS.border}`,
+                borderRadius:10
+              }}>
+                {SIZE_PRESETS[kitSize].right[i]} mm
+              </div>
+            </Fragment>
+          ))}
+        </div>
+      </div>
+    )}
+  </>
+)}
 
 // ============================================================
 
